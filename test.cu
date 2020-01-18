@@ -7,16 +7,19 @@ void testKernel(Lock* locks, int num_locks) {
     int id = blockIdx.x * blockDim.x + threadIdx.x;
     Lock *lock = locks + id % num_locks;
 
-    if (lock -> lock()) {
-        printf("[%d] Locked %d\n", id, id % num_locks);
+    while (true) {
+        if (lock -> lock()) {
+            printf("[%d] Locked %d\n", id, id % num_locks);
 
-        if (lock -> unlock()) {
-            printf("[%d] Unlocked %d\n", id, id % num_locks);
+            if (lock -> unlock()) {
+                printf("[%d] Unlocked %d\n", id, id % num_locks);
+                break;
+            } else {
+                printf("[%d] ERROR: Not able to unlock %d\n", id, id % num_locks);
+            }
         } else {
-            printf("[%d] ERROR: Not able to unlock %d\n", id, id % num_locks);
+            printf("[%d] Failed to lock %d\n", id, id % num_locks);
         }
-    } else {
-        printf("[%d] Failed to lock %d\n", id, id % num_locks);
     }
 }
 
@@ -40,7 +43,7 @@ int main() {
     gpuErrchk( cudaPeekAtLastError() );
     gpuErrchk( cudaDeviceSynchronize() );
 
-    testKernel<<<1, 10>>>(locks, num_locks);
+    testKernel<<<1, 4>>>(locks, num_locks);
     gpuErrchk( cudaPeekAtLastError() );
     gpuErrchk( cudaDeviceSynchronize() );
 
