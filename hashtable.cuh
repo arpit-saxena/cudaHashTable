@@ -32,4 +32,13 @@ namespace init_table {
 	void init_empty_table(Data *, int);
 }
 
+// Temporary hash functions
+namespace HashFunction {
+	__device__
+	int h1(LL key, int size);
+
+	__device__
+	int h2(LL key, int size);
+}
+
 #endif /* HASHTABLE_H */

@@ -15,6 +15,16 @@ void init_table::init_empty_table(Data * table, int size) {
 	}
 }
 
+__device__
+int HashFunction::h1(LL key, int size) {
+	return key % size;
+}
+
+__device__
+int HashFunction::h2(LL key, int size) {
+	return 1;
+}
+
 HashTable::HashTable(int size) {
 	this->size = size;
 	gpuErrchk( cudaMalloc(&table, size * sizeof(Data)) );
@@ -24,8 +34,26 @@ HashTable::HashTable(int size) {
 }
 
 __device__
-bool HashTable::insert(LL key){
-	return true;
+bool HashTable::insert(LL key) {
+	int N = this->size, h1 = HashFunction::h1(key, size), h2 = HashFunction::h2(key, size);
+	int index = h1;
+	while(N-->0){
+		auto current = (table+index);
+		State s = current->state;
+		if(s != FULL){
+			if( current->lock.lock() ) {
+				if(s != FULL) {
+					current->state = FULL;
+					current->key = key;
+					current->lock.unlock();
+					return true;
+					// Can't guarantee that the element will be there after insert returns...
+				}
+			}
+		}
+		index += h2;
+	}
+	return false;
 }
 
 void HashTable::check() {
