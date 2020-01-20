@@ -1,5 +1,6 @@
 #include "lock.cuh"
 #include "errorcheck.h"
+#include "hashtable.cuh"
 #include <stdio.h>
 
 __global__
@@ -48,6 +49,9 @@ int main() {
     gpuErrchk( cudaDeviceSynchronize() );
 
     gpuErrchk( cudaFree(locks) );
+
+    HashTable h1(64);
+    h1.check();
 
     return 0;
 }

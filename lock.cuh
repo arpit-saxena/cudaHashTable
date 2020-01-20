@@ -18,6 +18,11 @@ class Lock {
         // false, the state of the lock is left unchanged
         __device__
         bool unlock();
+
+        // Returns true if the lock is available to acquire
+        // Does not try to acquire the lock
+        __device__ __host__
+        bool trylock();
 };
 
 #endif /* LOCK_H */

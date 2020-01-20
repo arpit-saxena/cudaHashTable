@@ -28,3 +28,8 @@ bool Lock::unlock() {
 
     return ret;
 }
+
+__device__ __host__
+bool Lock::trylock() {
+    return state == -1;
+}
