@@ -21,11 +21,18 @@ class HashTable {
 		HashTable(int size);
 		~HashTable();
 
-		__device__
-		bool insert(LL key);
+		__device__ bool insert(LL key);
+		__device__ bool deleteKey(LL key);
+		void insert(LL * keys, int numKeys, bool * ret = nullptr);
 
 		void check();
 };
+
+// Contains all the CUDA kernels
+namespace cu {
+	// Insert array of keys into table given. Stores insert statuses in ret
+	__global__ void insert(const HashTable * table, LL * keys, const int numKeys, bool * ret);
+}
 
 namespace init_table {
 	__global__

@@ -37,7 +37,7 @@ __device__
 bool HashTable::insert(LL key) {
 	int N = this->size, h1 = HashFunction::h1(key, size), h2 = HashFunction::h2(key, size);
 	int index = h1;
-	while(N-->0){
+	while(N--){
 		auto current = (table+index);
 		State s = current->state;
 		if(s != FULL){
@@ -54,6 +54,21 @@ bool HashTable::insert(LL key) {
 		index += h2;
 	}
 	return false;
+}
+
+void HashTable::insert(LL *keys, int numKeys, bool *ret) {
+	int threads_per_block = 32;
+	int blocks = (numKeys + threads_per_block - 1) / threads_per_block;
+	cu::insert<<<blocks, threads_per_block>>>(this, keys, numKeys, ret);
+}
+
+__global__
+void cu::insert(HashTable *table, LL *keys, int numKeys, bool *ret) {
+	for(int id = blockIdx.x * blockDim.x + threadIdx.x; id < numKeys;
+		id += blockDim.x * gridDim.x) {
+			bool ans = table -> insert(keys[id]);
+			if (ret) ret[id] = ans;
+		}
 }
 
 void HashTable::check() {
