@@ -39,10 +39,9 @@ bool HashTable::insert(LL key) {
 	int index = h1;
 	while(N--){
 		auto current = (table+index);
-		State s = current->state;
-		if(s != FULL){
+		if(current->state != FULL){
 			if( current->lock.lock() ) {
-				if(s != FULL) {
+				if(current->state != FULL) {
 					current->state = FULL;
 					current->key = key;
 					current->lock.unlock();
