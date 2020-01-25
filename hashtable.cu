@@ -37,54 +37,147 @@ __device__
 bool HashTable::insert(LL key) {
 	int N = this->size, h1 = HashFunction::h1(key, size), h2 = HashFunction::h2(key, size);
 	int index = h1;
-	while(N--){
+	while(N > 0){
 		auto current = (table+index);
-		if(current->state != FULL){
-			if( current->lock.lock() ) {
-				if(current->state != FULL) {
-					current->state = FULL;
-					current->key = key;
-					current->lock.unlock();
-					return true;
-					// Can't guarantee that the element will be there after insert returns...
-				}
+		if( current->lock.lock(Thread::Insert) ) {
+			__threadfence(); // Not sure if it is needed
+			if(current->state != FULL) {
+				current->state = FULL;
+				current->key = key;
+				current->lock.unlock();
+				return true;
+				// Can't guarantee that the element will be there after insert returns...
 			}
+
+			index = (index + h2) % size;
+			N--;
 		}
-		index += h2;
 	}
 	return false;
 }
 
-void HashTable::insert(LL *keys, int numKeys, bool *ret) {
+__device__
+bool HashTable::deleteKey(LL key) {
+	int N = this->size;
+	int h1 = HashFunction::h1(key, size);
+	int h2 = HashFunction::h2(key, size);
+	int index = h1;
+
+	while (N > 0) {
+		Data *current = table + index;
+		if (current->lock.lock(Thread::Delete)) {
+			__threadfence(); // Not sure if it is needed
+			switch(current->state) {
+				case FULL:
+					if (current->key == key) {
+						current->state = DELETED;
+						current->lock.unlock();
+						return true;
+					}
+					index = (index + h2) % size; N--;
+					break;
+				case DELETED:
+					index = (index + h2) % size; N--;
+					break;
+				case EMPTY:
+					current->lock.unlock();
+					return false;
+				default:
+					printf("Unrecognized thread type\n");
+			}
+			current->lock.unlock();
+		}
+	}
+
+	return false;
+}
+
+__device__
+bool HashTable::findKey(LL key) {
+	int N = this->size;
+	int h1 = HashFunction::h1(key, size);
+	int h2 = HashFunction::h2(key, size);
+	
+	int index = h1;
+
+	while (N > 0) {
+		Data *current = table + index;
+		if (current->lock.lock(Thread::Find)) {
+			switch(current->state) {
+				case FULL:
+					if (current->key == key) {
+						current->lock.unlock();
+						return true;
+					}
+					// No break; moves to next case
+				case DELETED:
+					index = (index + h2) % size;
+					N--;
+					break;
+				case EMPTY:
+					current->lock.unlock();
+					return false;
+			}
+		}
+	}
+
+	return false;
+}
+
+void HashTable::performInstructs(HashTable *table, Instruction *ins, int numIns, bool *ret) {
 	int threads_per_block = 32;
-	int blocks = (numKeys + threads_per_block - 1) / threads_per_block;
-	cu::insert<<<blocks, threads_per_block>>>(this, keys, numKeys, ret);
+	int blocks = (numIns + threads_per_block - 1) / threads_per_block;
+	cu::performInstructs<<<blocks, threads_per_block>>>(table, ins, numIns, ret);
 }
 
 __global__
-void cu::insert(HashTable *table, LL *keys, int numKeys, bool *ret) {
-	for(int id = blockIdx.x * blockDim.x + threadIdx.x; id < numKeys;
-		id += blockDim.x * gridDim.x) {
-			bool ans = table -> insert(keys[id]);
-			if (ret) ret[id] = ans;
-		}
+void cu::performInstructs(
+	HashTable * table,
+	Instruction *instructions,
+	int numInstructions,
+	bool * ret) {
+		for(int id = blockIdx.x * blockDim.x + threadIdx.x; id < numInstructions;
+			id += blockDim.x * gridDim.x) {
+				bool ans;
+				switch(instructions[id].type) {
+					case Instruction::Insert:
+						ans = table -> insert(instructions[id].key);
+						break;
+					case Instruction::Delete:
+						ans = table -> deleteKey(instructions[id].key);
+						break;
+					case Instruction::Find:
+						ans = table -> findKey(instructions[id].key);
+						break;
+				}
+				if (ret) ret[id] = ans;
+			}
 }
 
-void HashTable::check() {
-	Data * hostTable = new Data[size];
-	gpuErrchk( cudaMemcpy(hostTable, table, size * sizeof(Data), cudaMemcpyDeviceToHost) );
-	for(int i = 0; i < size; ++i) {
-		if(!(hostTable+i)->lock.trylock()) {
-			printf("Hashtable locks not initialized properly!!\n");
-			break;
-		}
-		else if((hostTable+i)->key != 0 || (hostTable+i)->state != EMPTY){
-			printf("That's weird...");
-			break;
+void HashTable::print(HashTable *d_hashTable) {
+	gpuErrchk( cudaDeviceSynchronize() );
+
+	HashTable *hashTable = (HashTable *) malloc(sizeof(HashTable));
+	cudaMemcpy(hashTable, d_hashTable, sizeof(HashTable), cudaMemcpyDeviceToHost);
+	Data *d_table = hashTable->table;
+	int size = hashTable->size;
+
+	size_t sizeB = size * sizeof(Data);
+	Data *table = (Data *) malloc(sizeB);
+	gpuErrchk( cudaMemcpy(table, d_table, size, cudaMemcpyDeviceToHost) );
+	for (int i = 0; i < size; i++) {
+		switch(table[i].state) {
+			case FULL:
+				printf("Idx%d: %lld\n", i, table[i].key);
+				break;
+			case DELETED:
+				printf("Idx%d: DELETED\n", i);
+				break;
 		}
 	}
-	delete [] hostTable;
-	printf("yay!!\n");
+
+	free(table);
+	free(hashTable);
 }
 
 HashTable::~HashTable() {

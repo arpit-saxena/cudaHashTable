@@ -1,8 +1,14 @@
 #ifndef LOCK_H
 #define LOCK_H
 
+enum class Thread {
+    Insert,
+    Delete,
+    Find
+};
+
 class Lock {
-    int state;
+    volatile int state;
 
     public:
         // Initialises the lock
@@ -11,7 +17,7 @@ class Lock {
 
         // Returns true if it was able to lock, false otherwise
         __device__
-        bool lock();
+        bool lock(Thread type);
 
         // Returns true if it was able to unlock, false if some error occurred in
         // unlocking (perhaps another thread was holding the lock). If it returns

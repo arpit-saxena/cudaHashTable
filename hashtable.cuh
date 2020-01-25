@@ -8,14 +8,25 @@ typedef long long int LL;
 enum State {EMPTY, DELETED, FULL};
 
 struct Data {
-	State state;
-	LL key;
+	volatile State state;
+	volatile LL key;
 	Lock lock;
+};
+
+struct Instruction {
+	enum Type {
+		Insert,
+		Delete,
+		Find
+	};
+
+	Type type;
+	LL key;
 };
 
 class HashTable {
 		Data * table;
-		int size;
+		__device__ int size;
 
 	public:
 		HashTable(int size);
@@ -23,15 +34,20 @@ class HashTable {
 
 		__device__ bool insert(LL key);
 		__device__ bool deleteKey(LL key);
-		void insert(LL * keys, int numKeys, bool * ret = nullptr);
-
-		void check();
+		__device__ bool findKey(LL key);
+		static void performInstructs(HashTable *table, Instruction *instructions,
+			int numInstruction, bool *ret);
+		static void print(HashTable *table);
 };
 
 // Contains all the CUDA kernels
 namespace cu {
 	// Insert array of keys into table given. Stores insert statuses in ret
-	__global__ void insert(const HashTable * table, LL * keys, const int numKeys, bool * ret);
+	__global__ void performInstructs(
+		HashTable * table,
+		Instruction *instructions,
+		int numInstructions,
+		bool * ret);
 }
 
 namespace init_table {

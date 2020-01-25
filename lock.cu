@@ -8,28 +8,18 @@ void Lock::init() {
 }
 
 __device__
-bool Lock::lock() {
-    int id = blockIdx.x * blockDim.x + threadIdx.x;
-    return atomicCAS(&state, -1, id) == -1;
+bool Lock::lock(Thread type) {
+    return atomicCAS((int *) &state, -1, (int) type) == -1;
 }
 
 __device__
 bool Lock::unlock() {
-    int id = blockIdx.x * blockDim.x + threadIdx.x;
-    bool ret = atomicCAS(&state, id, -1) == id;
-
-    #ifdef DEBUG
-    
-    if (!ret) {
-        printf("Attempt to unlock by non-owning thread.\n");
-    }
-
-    #endif /* DEBUG */
-
-    return ret;
+    __threadfence();
+    state = -1;
+    return true;
 }
 
-__device__ __host__
+__device__
 bool Lock::trylock() {
     return state == -1;
 }

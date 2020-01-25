@@ -2,6 +2,10 @@
 #include "errorcheck.h"
 #include "hashtable.cuh"
 #include <stdio.h>
+#include <iostream>
+#include <fstream>
+#include <string>
+#include <utility>
 
 __global__
 void testKernel(Lock* locks, int num_locks) {
@@ -9,7 +13,7 @@ void testKernel(Lock* locks, int num_locks) {
     Lock *lock = locks + id % num_locks;
 
     while (true) {
-        if (lock -> lock()) {
+        if (lock -> lock(Thread::Insert)) {
             printf("[%d] Locked %d\n", id, id % num_locks);
 
             if (lock -> unlock()) {
@@ -35,7 +39,7 @@ void initLocks(Lock *locks, int num_locks) {
     }
 }
 
-int main() {
+void checkLocks() {
     Lock *locks;
     int num_locks = 2;
 
@@ -52,6 +56,46 @@ int main() {
 
     HashTable h1(64);
     h1.check();
+}
+
+std::pair<Instruction *, int> getInstructions(std::string name) {
+    std::ifstream fin(name);
+    int numIns; fin >> numIns;
+    Instruction *ins = (Instruction *) malloc(numIns * sizeof(Instruction));
+    for (int i = 0; i < numIns; i++) {
+        std::string type; fin >> type;
+        if (type == "INSERT") {
+            ins[i].type = Instruction::Insert;
+        } else if (type == "DELETE") {
+            ins[i].type = Instruction::Delete;
+        } else if (type == "FIND") {
+            ins[i].type = Instruction::Find;
+        } else {
+            printf("Undefined instruction %s\n", type.c_str());
+        }
+
+        LL key; fin >> key;
+        ins[i].key = key;
+    }
+    return std::make_pair(ins, numIns);
+}
+
+int main() {
+    HashTable table(100);
+    auto p = getInstructions("instructions.txt");
+    Instruction *ins = p.first;
+    int numIns = p.second;
+
+    Instruction *d_ins;
+    gpuErrchk( cudaMalloc(&d_ins, numIns * sizeof(Instruction)) );
+    gpuErrchk( cudaMemcpy(d_ins, ins, numIns * sizeof(Instruction), cudaMemcpyDefault) );
+
+    HashTable::performInstructs(table, d_ins, numIns, nullptr);
+    HashTable::print(table);
+
+    gpuErrchk( cudaDeviceSynchronize() );
+    free(ins);
+    cudaFree(d_ins);
 
     return 0;
 }
