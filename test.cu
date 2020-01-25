@@ -81,7 +81,7 @@ int main() {
     HashTable h_table(100);
     HashTable *table;
     gpuErrchk( cudaMalloc(&table, sizeof(HashTable)) );
-    gpuErrchk( cudaMemcpy(table, &h_table, sizeof(HashTable), cudaMemcpyDefault) );
+    gpuErrchk( cudaMemcpy(table, &h_table, sizeof(HashTable), cudaMemcpyHostToDevice) );
 
     auto p = getInstructions("instructions.txt");
     Instruction *ins = p.first;
@@ -97,6 +97,7 @@ int main() {
     gpuErrchk( cudaDeviceSynchronize() );
     free(ins);
     cudaFree(d_ins);
+    cudaFree(table);
 
     return 0;
 }

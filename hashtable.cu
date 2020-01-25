@@ -45,12 +45,14 @@ bool HashTable::insert(LL key) {
 				current->state = FULL;
 				current->key = key;
 				current->lock.unlock();
+
 				return true;
 				// Can't guarantee that the element will be there after insert returns...
 			}
 
 			index = (index + h2) % size;
 			N--;
+			current->lock.unlock();
 		}
 	}
 	return false;
@@ -154,17 +156,10 @@ void cu::performInstructs(
 			}
 }
 
-void HashTable::print(HashTable *d_hashTable) {
-	gpuErrchk( cudaDeviceSynchronize() );
-
-	HashTable *hashTable = (HashTable *) malloc(sizeof(HashTable));
-	cudaMemcpy(hashTable, d_hashTable, sizeof(HashTable), cudaMemcpyDeviceToHost);
-	Data *d_table = hashTable->table;
+__global__
+void printtt(HashTable *hashTable) {
+	Data *table = hashTable->table;
 	int size = hashTable->size;
-
-	size_t sizeB = size * sizeof(Data);
-	Data *table = (Data *) malloc(sizeB);
-	gpuErrchk( cudaMemcpy(table, d_table, size, cudaMemcpyDeviceToHost) );
 	for (int i = 0; i < size; i++) {
 		switch(table[i].state) {
 			case FULL:
@@ -175,9 +170,12 @@ void HashTable::print(HashTable *d_hashTable) {
 				break;
 		}
 	}
+}
 
-	free(table);
-	free(hashTable);
+void HashTable::print(HashTable *d_hashTable) {
+	gpuErrchk( cudaDeviceSynchronize() );
+
+	printtt<<<1, 1>>>(d_hashTable);
 }
 
 HashTable::~HashTable() {

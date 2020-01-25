@@ -25,10 +25,11 @@ struct Instruction {
 };
 
 class HashTable {
-		Data * table;
-		int size;
+		
 
 	public:
+		Data * table;
+		int size;
 		HashTable(int size);
 		~HashTable();
 
