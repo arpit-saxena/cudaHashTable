@@ -26,7 +26,7 @@ struct Instruction {
 
 class HashTable {
 		Data * table;
-		__device__ int size;
+		int size;
 
 	public:
 		HashTable(int size);

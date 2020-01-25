@@ -53,9 +53,6 @@ void checkLocks() {
     gpuErrchk( cudaDeviceSynchronize() );
 
     gpuErrchk( cudaFree(locks) );
-
-    HashTable h1(64);
-    h1.check();
 }
 
 std::pair<Instruction *, int> getInstructions(std::string name) {
@@ -81,7 +78,11 @@ std::pair<Instruction *, int> getInstructions(std::string name) {
 }
 
 int main() {
-    HashTable table(100);
+    HashTable h_table(100);
+    HashTable *table;
+    gpuErrchk( cudaMalloc(&table, sizeof(HashTable)) );
+    gpuErrchk( cudaMemcpy(table, &h_table, sizeof(HashTable), cudaMemcpyDefault) );
+
     auto p = getInstructions("instructions.txt");
     Instruction *ins = p.first;
     int numIns = p.second;
