@@ -2,6 +2,7 @@
 #define HASHTABLE_H
 
 #include "lock.cuh"
+#include <iostream>
 
 typedef long long int LL;
 
@@ -19,27 +20,46 @@ struct Instruction {
 		Delete,
 		Find
 	};
-
+	
 	Type type;
 	LL key;
 };
 
-class HashTable {
-		
+class HTResult {
+	
+	public:
+		int * iterations, * h_iterations, final_index, size;
+		bool returned;
 
+		HTResult(int size);
+
+		~HTResult();
+
+		void to_string(std::ostream &);
+		void fillhostarray();
+};
+
+class HashTable {
+	
+	
 	public:
 		Data * table;
 		int size;
 		HashTable(int size);
 		~HashTable();
 
-		__device__ bool insert(LL key);
-		__device__ bool deleteKey(LL key);
-		__device__ bool findKey(LL key);
+		__device__ void insert(LL key, HTResult *);
+		__device__ void deleteKey(LL key, HTResult *);
+		__device__ void findKey(LL key, HTResult *);
 		static void performInstructs(HashTable *table, Instruction *instructions,
-			int numInstruction, bool *ret);
-		static void print(HashTable *table);
-};
+			int numInstruction, HTResult *);
+			static void print(HashTable *table);
+		};
+		
+namespace init_table {
+	__global__
+	void init_empty_table(Data *, int);
+}
 
 // Contains all the CUDA kernels
 namespace cu {
@@ -48,12 +68,7 @@ namespace cu {
 		HashTable * table,
 		Instruction *instructions,
 		int numInstructions,
-		bool * ret);
-}
-
-namespace init_table {
-	__global__
-	void init_empty_table(Data *, int);
+		HTResult *);
 }
 
 // Temporary hash functions

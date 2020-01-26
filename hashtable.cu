@@ -2,6 +2,7 @@
 #include "errorcheck.h"
 #include "lock.cuh"
 #include <stdio.h>
+#include <cstring>
 
 __global__
 void init_table::init_empty_table(Data * table, int size) {
@@ -34,19 +35,21 @@ HashTable::HashTable(int size) {
 }
 
 __device__
-bool HashTable::insert(LL key) {
+void HashTable::insert(LL key, HTResult * status) {
 	int N = this->size, h1 = HashFunction::h1(key, size), h2 = HashFunction::h2(key, size);
 	int index = h1;
 	while(N > 0){
 		auto current = (table+index);
+		++(status -> iterations[index]);
 		if( current->lock.lock(Thread::Insert) ) {
 			__threadfence(); // Not sure if it is needed
 			if(current->state != FULL) {
 				current->state = FULL;
 				current->key = key;
 				current->lock.unlock();
-
-				return true;
+				status->final_index = index;
+				status->returned = true;
+				return;
 				// Can't guarantee that the element will be there after insert returns...
 			}
 
@@ -54,12 +57,15 @@ bool HashTable::insert(LL key) {
 			N--;
 			current->lock.unlock();
 		}
+	return ;
 	}
-	return false;
+	status->final_index = index;
+	status->returned = false;
+
 }
 
 __device__
-bool HashTable::deleteKey(LL key) {
+void HashTable::deleteKey(LL key, HTResult * status) {
 	int N = this->size;
 	int h1 = HashFunction::h1(key, size);
 	int h2 = HashFunction::h2(key, size);
@@ -67,6 +73,7 @@ bool HashTable::deleteKey(LL key) {
 
 	while (N > 0) {
 		Data *current = table + index;
+		++(status -> iterations[index]);
 		if (current->lock.lock(Thread::Delete)) {
 			__threadfence(); // Not sure if it is needed
 			switch(current->state) {
@@ -74,7 +81,9 @@ bool HashTable::deleteKey(LL key) {
 					if (current->key == key) {
 						current->state = DELETED;
 						current->lock.unlock();
-						return true;
+						status->final_index = index;
+						status->returned = true;		
+						return;
 					}
 					index = (index + h2) % size; N--;
 					break;
@@ -83,19 +92,21 @@ bool HashTable::deleteKey(LL key) {
 					break;
 				case EMPTY:
 					current->lock.unlock();
-					return false;
+					status->final_index = index;
+					status->returned = false;
+					return;
 				default:
 					printf("Unrecognized thread type\n");
 			}
 			current->lock.unlock();
 		}
 	}
-
-	return false;
+	status->final_index = index;
+	status->returned = false;
 }
 
 __device__
-bool HashTable::findKey(LL key) {
+void HashTable::findKey(LL key, HTResult * status) {
 	int N = this->size;
 	int h1 = HashFunction::h1(key, size);
 	int h2 = HashFunction::h2(key, size);
@@ -104,32 +115,44 @@ bool HashTable::findKey(LL key) {
 
 	while (N > 0) {
 		Data *current = table + index;
+		++(status -> iterations[index]);
 		if (current->lock.lock(Thread::Find)) {
 			switch(current->state) {
 				case FULL:
 					if (current->key == key) {
 						current->lock.unlock();
-						return true;
+						status->final_index = index;
+						status->returned = true;		
+						return;
 					}
 					// No break; moves to next case
 				case DELETED:
+					current->lock.unlock();
 					index = (index + h2) % size;
 					N--;
 					break;
 				case EMPTY:
 					current->lock.unlock();
-					return false;
+					status->final_index = index;
+					status->returned = false;
+					return;
 			}
 		}
 	}
-
-	return false;
+	status->final_index = index;
+	status->returned = false;
 }
 
-void HashTable::performInstructs(HashTable *table, Instruction *ins, int numIns, bool *ret) {
+void HashTable::performInstructs(HashTable *table, Instruction *ins, int numIns, HTResult * status) {
 	int threads_per_block = 32;
 	int blocks = (numIns + threads_per_block - 1) / threads_per_block;
-	cu::performInstructs<<<blocks, threads_per_block>>>(table, ins, numIns, ret);
+	HTResult * d_status;
+	gpuErrchk( cudaMalloc(&d_status, numIns*sizeof(HTResult)) );
+	gpuErrchk( cudaMemcpy(d_status, status, numIns*sizeof(HTResult), cudaMemcpyDefault) );
+	cu::performInstructs<<<blocks, threads_per_block>>>(table, ins, numIns, d_status);
+	gpuErrchk( cudaMemcpy(status, d_status, numIns*sizeof(HTResult), cudaMemcpyDefault) );
+	gpuErrchk( cudaFree(d_status) );
+	status->fillhostarray();
 }
 
 __global__
@@ -137,22 +160,20 @@ void cu::performInstructs(
 	HashTable * table,
 	Instruction *instructions,
 	int numInstructions,
-	bool * ret) {
+	HTResult * status) {
 		for(int id = blockIdx.x * blockDim.x + threadIdx.x; id < numInstructions;
 			id += blockDim.x * gridDim.x) {
-				bool ans;
 				switch(instructions[id].type) {
 					case Instruction::Insert:
-						ans = table -> insert(instructions[id].key);
+						table -> insert(instructions[id].key, status + id);
 						break;
 					case Instruction::Delete:
-						ans = table -> deleteKey(instructions[id].key);
+						table -> deleteKey(instructions[id].key, status + id);
 						break;
 					case Instruction::Find:
-						ans = table -> findKey(instructions[id].key);
+						table -> findKey(instructions[id].key, status + id);
 						break;
 				}
-				if (ret) ret[id] = ans;
 			}
 }
 
@@ -180,4 +201,32 @@ void HashTable::print(HashTable *d_hashTable) {
 
 HashTable::~HashTable() {
 	gpuErrchk( cudaFree(table) );
+}
+
+HTResult::HTResult(int size) {
+	this->size = size;
+	gpuErrchk( cudaMalloc(&iterations, size*sizeof(int)) );
+	gpuErrchk( cudaMemset(iterations, 0, size*sizeof(int)) );
+	final_index = -1;
+	returned = false;
+	h_iterations = new int[size];
+}
+
+HTResult::~HTResult() {
+	cudaFree(this->iterations);
+	delete [] h_iterations;
+}
+
+void HTResult::to_string(std::ostream & out) {
+	out << (returned ? "Success\n" : "Failure\n");
+	out << "Iterations this thread spent per index:\n";
+	for(int i = 0; i < size; ++i) {
+		out << h_iterations[i] << " | ";
+	}
+	out << "\nFinal Index = ";
+	out << final_index << std::endl;
+}
+
+void HTResult::fillhostarray() {
+	gpuErrchk( cudaMemcpy(h_iterations, iterations, size*sizeof(int), cudaMemcpyDefault) );
 }

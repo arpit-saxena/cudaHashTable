@@ -91,13 +91,21 @@ int main() {
     gpuErrchk( cudaMalloc(&d_ins, numIns * sizeof(Instruction)) );
     gpuErrchk( cudaMemcpy(d_ins, ins, numIns * sizeof(Instruction), cudaMemcpyDefault) );
 
-    HashTable::performInstructs(table, d_ins, numIns, nullptr);
+    HTResult * statuses = (HTResult *)malloc(sizeof(HTResult)*numIns);
+    for(int i = 0; i < numIns; ++i) {
+        new (statuses + i) HTResult(h_table.size);
+    }
+    HashTable::performInstructs(table, d_ins, numIns, (HTResult *)statuses);
     HashTable::print(table);
 
     gpuErrchk( cudaDeviceSynchronize() );
     free(ins);
     cudaFree(d_ins);
     cudaFree(table);
+    for(int i = 0; i < numIns; ++i) {
+        (statuses + i)->~HTResult();
+    }
+    free(statuses);
 
     return 0;
 }

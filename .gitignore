@@ -1,3 +1,11 @@
 .vscode/
 *.o
 /test
+*.sln
+*.vcxproj*
+x64/
+*.o
+*.exe
+*.pdb
+*.exp
+*.lib
