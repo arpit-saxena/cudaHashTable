@@ -35,7 +35,7 @@ HashTable::HashTable(int size) {
 }
 
 __device__
-void HashTable::insert(LL key, HTResult * status) {
+void HashTable::insert(LL key, ThreadLog * status) {
 	int N = this->size, h1 = HashFunction::h1(key, size), h2 = HashFunction::h2(key, size);
 	int index = h1;
 	while(N > 0){
@@ -57,7 +57,6 @@ void HashTable::insert(LL key, HTResult * status) {
 			N--;
 			current->lock.unlock();
 		}
-	return ;
 	}
 	status->final_index = index;
 	status->returned = false;
@@ -65,7 +64,7 @@ void HashTable::insert(LL key, HTResult * status) {
 }
 
 __device__
-void HashTable::deleteKey(LL key, HTResult * status) {
+void HashTable::deleteKey(LL key, ThreadLog * status) {
 	int N = this->size;
 	int h1 = HashFunction::h1(key, size);
 	int h2 = HashFunction::h2(key, size);
@@ -106,7 +105,7 @@ void HashTable::deleteKey(LL key, HTResult * status) {
 }
 
 __device__
-void HashTable::findKey(LL key, HTResult * status) {
+void HashTable::findKey(LL key, ThreadLog * status) {
 	int N = this->size;
 	int h1 = HashFunction::h1(key, size);
 	int h2 = HashFunction::h2(key, size);
@@ -143,16 +142,16 @@ void HashTable::findKey(LL key, HTResult * status) {
 	status->returned = false;
 }
 
-void HashTable::performInstructs(HashTable *table, Instruction *ins, int numIns, HTResult * status) {
+void HashTable::performInstructs(HashTable *table, Instruction *ins, int numIns, ThreadLog * status) {
 	int threads_per_block = 32;
 	int blocks = (numIns + threads_per_block - 1) / threads_per_block;
-	HTResult * d_status;
-	gpuErrchk( cudaMalloc(&d_status, numIns*sizeof(HTResult)) );
-	gpuErrchk( cudaMemcpy(d_status, status, numIns*sizeof(HTResult), cudaMemcpyDefault) );
+	ThreadLog * d_status;
+	gpuErrchk( cudaMalloc(&d_status, numIns*sizeof(ThreadLog)) );
+	gpuErrchk( cudaMemcpy(d_status, status, numIns*sizeof(ThreadLog), cudaMemcpyDefault) );
 	cu::performInstructs<<<blocks, threads_per_block>>>(table, ins, numIns, d_status);
-	gpuErrchk( cudaMemcpy(status, d_status, numIns*sizeof(HTResult), cudaMemcpyDefault) );
+	gpuErrchk( cudaMemcpy(status, d_status, numIns*sizeof(ThreadLog), cudaMemcpyDefault) );
 	gpuErrchk( cudaFree(d_status) );
-	status->fillhostarray();
+	for (int i = 0; i < numIns; ++i) { (status + i)->fillhostarray(); }
 }
 
 __global__
@@ -160,7 +159,7 @@ void cu::performInstructs(
 	HashTable * table,
 	Instruction *instructions,
 	int numInstructions,
-	HTResult * status) {
+	ThreadLog * status) {
 		for(int id = blockIdx.x * blockDim.x + threadIdx.x; id < numInstructions;
 			id += blockDim.x * gridDim.x) {
 				switch(instructions[id].type) {
@@ -193,32 +192,52 @@ void printtt(HashTable *hashTable) {
 	}
 }
 
-void HashTable::print(HashTable *d_hashTable) {
+void HashTable::print(HashTable *d_hashTable, ThreadLog * statuses, int statuses_size, std::ostream & out) {
 	gpuErrchk( cudaDeviceSynchronize() );
 
 	printtt<<<1, 1>>>(d_hashTable);
+
+	for (int i = 0; i < statuses_size; ++i) {
+		(statuses+i)->to_string(out << std::endl << i << ". \n");
+	}
 }
 
 HashTable::~HashTable() {
 	gpuErrchk( cudaFree(table) );
 }
 
-HTResult::HTResult(int size) {
+ThreadLog::ThreadLog(int size, Instruction ins) {
 	this->size = size;
 	gpuErrchk( cudaMalloc(&iterations, size*sizeof(int)) );
 	gpuErrchk( cudaMemset(iterations, 0, size*sizeof(int)) );
 	final_index = -1;
 	returned = false;
 	h_iterations = new int[size];
+	instruction = ins;
 }
 
-HTResult::~HTResult() {
+ThreadLog::~ThreadLog() {
 	cudaFree(this->iterations);
 	delete [] h_iterations;
 }
 
-void HTResult::to_string(std::ostream & out) {
-	out << (returned ? "Success\n" : "Failure\n");
+void ThreadLog::to_string(std::ostream & out) {
+	out << "Instruction: ";
+	switch (instruction.type) {
+		case Instruction::Insert :
+			out << "INSERT ";
+			break;
+		case Instruction::Delete:
+			out << "DELETE ";
+			break;
+		case Instruction::Find:
+			out << "FIND ";
+			break;
+		default:
+			out << "Unrecognized instruction given to thread!!\n";
+			return;
+	}
+	out << instruction.key << "\n" << (returned ? "Success\n" : "Failure\n");
 	out << "Iterations this thread spent per index:\n";
 	for(int i = 0; i < size; ++i) {
 		out << h_iterations[i] << " | ";
@@ -227,6 +246,6 @@ void HTResult::to_string(std::ostream & out) {
 	out << final_index << std::endl;
 }
 
-void HTResult::fillhostarray() {
+void ThreadLog::fillhostarray() {
 	gpuErrchk( cudaMemcpy(h_iterations, iterations, size*sizeof(int), cudaMemcpyDefault) );
 }

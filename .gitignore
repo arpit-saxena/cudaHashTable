@@ -9,3 +9,4 @@ x64/
 *.pdb
 *.exp
 *.lib
+log.txt

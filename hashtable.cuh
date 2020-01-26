@@ -25,15 +25,16 @@ struct Instruction {
 	LL key;
 };
 
-class HTResult {
+class ThreadLog {
 	
 	public:
 		int * iterations, * h_iterations, final_index, size;
 		bool returned;
+		Instruction instruction;
 
-		HTResult(int size);
+		ThreadLog(int size, Instruction);
 
-		~HTResult();
+		~ThreadLog();
 
 		void to_string(std::ostream &);
 		void fillhostarray();
@@ -48,12 +49,12 @@ class HashTable {
 		HashTable(int size);
 		~HashTable();
 
-		__device__ void insert(LL key, HTResult *);
-		__device__ void deleteKey(LL key, HTResult *);
-		__device__ void findKey(LL key, HTResult *);
+		__device__ void insert(LL key, ThreadLog *);
+		__device__ void deleteKey(LL key, ThreadLog *);
+		__device__ void findKey(LL key, ThreadLog *);
 		static void performInstructs(HashTable *table, Instruction *instructions,
-			int numInstruction, HTResult *);
-			static void print(HashTable *table);
+			int numInstruction, ThreadLog *);
+			static void print(HashTable *table, ThreadLog *, int, std::ostream &);
 		};
 		
 namespace init_table {
@@ -68,7 +69,7 @@ namespace cu {
 		HashTable * table,
 		Instruction *instructions,
 		int numInstructions,
-		HTResult *);
+		ThreadLog *);
 }
 
 // Temporary hash functions
