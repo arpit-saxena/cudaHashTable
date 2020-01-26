@@ -88,7 +88,7 @@ vector<vector<Instruction>> getInstructions(std::string name) {
 }
 
 int main() {
-    HashTable h_table(10);
+    HashTable h_table(20);
     HashTable *table;
     gpuErrchk( cudaMalloc(&table, sizeof(HashTable)) );
     gpuErrchk( cudaMemcpy(table, &h_table, sizeof(HashTable), cudaMemcpyHostToDevice) );
@@ -127,7 +127,7 @@ int main() {
         auto time_now = std::chrono::system_clock::now();
         auto time = std::chrono::system_clock::to_time_t(time_now);
         HashTable::print(table, statuses, numIns, fout << "\n\nLogged at: " << std::ctime(&time));
-        std::cout << "Time taken by performInstructs: " << msecTotal << std::endl;
+        std::cout << "Time taken by performInstructs: " << msecTotal << " ms" << std::endl;
 
         gpuErrchk( cudaDeviceSynchronize() );
         free(ins);
