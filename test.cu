@@ -7,6 +7,8 @@
 #include <string>
 #include <utility>
 #include <vector>
+#include <chrono>
+#include <ctime>
 
 __global__
 void testKernel(Lock* locks, int num_locks) {
@@ -86,39 +88,55 @@ vector<vector<Instruction>> getInstructions(std::string name) {
 }
 
 int main() {
-    HashTable h_table(100);
+    HashTable h_table(10);
     HashTable *table;
     gpuErrchk( cudaMalloc(&table, sizeof(HashTable)) );
     gpuErrchk( cudaMemcpy(table, &h_table, sizeof(HashTable), cudaMemcpyHostToDevice) );
 
     auto p = getInstructions("instructions.txt");
 
+    std::ofstream fout("log.txt");
     for (auto &v_ins : p) {
         int numIns = v_ins.size();
-        Instruction ins[numIns];
+        Instruction *ins = (Instruction *) malloc(sizeof(Instruction) * numIns);
         std::copy(v_ins.begin(), v_ins.end(), ins);
 
         Instruction *d_ins;
         gpuErrchk( cudaMalloc(&d_ins, numIns * sizeof(Instruction)) );
         gpuErrchk( cudaMemcpy(d_ins, ins, numIns * sizeof(Instruction), cudaMemcpyDefault) );
 
-        HTResult * statuses = (HTResult *)malloc(sizeof(HTResult)*numIns);
+        ThreadLog * statuses = (ThreadLog *)malloc(sizeof(ThreadLog)*numIns);
         for(int i = 0; i < numIns; ++i) {
-            new (statuses + i) HTResult(h_table.size);
+            new (statuses + i) ThreadLog(h_table.size, ins[i]);
         }
-        HashTable::performInstructs(table, d_ins, numIns, (HTResult *)statuses);
-        HashTable::print(table);
+
+        cudaEvent_t start;
+        gpuErrchk( cudaEventCreate(&start) );
+
+        cudaEvent_t stop;
+        gpuErrchk( cudaEventCreate(&stop) );
+
+        gpuErrchk( cudaEventRecord(start, NULL) );
+        HashTable::performInstructs(table, d_ins, numIns, (ThreadLog *)statuses);
+        gpuErrchk( cudaEventRecord(stop, NULL) );
+
+        gpuErrchk( cudaEventSynchronize(stop) );
+        float msecTotal = 0.0f;
+        gpuErrchk( cudaEventElapsedTime(&msecTotal, start, stop) );
+
+        auto time_now = std::chrono::system_clock::now();
+        auto time = std::chrono::system_clock::to_time_t(time_now);
+        HashTable::print(table, statuses, numIns, fout << "\n\nLogged at: " << std::ctime(&time));
+        std::cout << "Time taken by performInstructs: " << msecTotal << std::endl;
 
         gpuErrchk( cudaDeviceSynchronize() );
         free(ins);
         cudaFree(d_ins);
-        cudaFree(table);
         for(int i = 0; i < numIns; ++i) {
-            (statuses + i)->~HTResult();
+            (statuses + i)->~ThreadLog();
         }
-        free(statuses);
-
     }
 
+    cudaFree(table);
     return 0;
 }
