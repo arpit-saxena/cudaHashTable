@@ -4,7 +4,7 @@
 #include "lock.cuh"
 #include <iostream>
 
-typedef long long int LL;
+typedef unsigned long long int LL;
 
 enum State {EMPTY, DELETED, FULL};
 

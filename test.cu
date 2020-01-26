@@ -87,13 +87,13 @@ vector<vector<Instruction>> getInstructions(std::string name) {
     return instructions;
 }
 
-int main() {
+int main(int argc, char **argv) {
     HashTable h_table(20);
     HashTable *table;
     gpuErrchk( cudaMalloc(&table, sizeof(HashTable)) );
     gpuErrchk( cudaMemcpy(table, &h_table, sizeof(HashTable), cudaMemcpyHostToDevice) );
 
-    auto p = getInstructions("instructions.txt");
+    auto p = getInstructions(argv[1]);
 
     std::ofstream fout("log.txt");
     for (auto &v_ins : p) {

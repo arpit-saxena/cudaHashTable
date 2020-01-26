@@ -17,13 +17,22 @@ void init_table::init_empty_table(Data * table, int size) {
 }
 
 __device__
-int HashFunction::h1(LL key, int size) {
-	return key % size;
+int HashFunction::h2(LL x, int size) {
+	x = ((x >> 16) ^ x) * 0x45d9f3b;
+    x = ((x >> 16) ^ x) * 0x45d9f3b;
+    x = (x >> 16) ^ x;
+    return x % size;
 }
 
 __device__
-int HashFunction::h2(LL key, int size) {
-	return 1;
+int HashFunction::h1(LL a, int size) {
+	a = (a+0x7ed55d16) + (a<<12);
+    a = (a^0xc761c23c) ^ (a>>19);
+    a = (a+0x165667b1) + (a<<5);
+    a = (a+0xd3a2646c) ^ (a<<9);
+    a = (a+0xfd7046c5) + (a<<3);
+    a = (a^0xb55a4f09) ^ (a>>16);
+    return a % size;
 }
 
 HashTable::HashTable(int size) {
