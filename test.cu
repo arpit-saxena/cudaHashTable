@@ -10,6 +10,8 @@
 #include <chrono>
 #include <ctime>
 
+bool logging = false;
+
 __global__
 void testKernel(Lock* locks, int num_locks) {
     int id = blockIdx.x * blockDim.x + threadIdx.x;
@@ -94,8 +96,6 @@ int main(int argc, char **argv) {
     gpuErrchk( cudaMemcpy(table, &h_table, sizeof(HashTable), cudaMemcpyHostToDevice) );
 
     auto p = getInstructions(argv[1]);
-
-    bool logging = false;
 
     std::ofstream fout;
     if (logging) fout.open("log.txt");
