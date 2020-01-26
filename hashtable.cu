@@ -49,15 +49,17 @@ void HashTable::insert(LL key, ThreadLog * status) {
 	int index = h1;
 	while(N > 0){
 		auto current = (table+index);
-		++(status -> iterations[index]);
+		if (status) ++(status -> iterations[index]);
 		if( current->lock.lock(Thread::Insert) ) {
 			__threadfence(); // Not sure if it is needed
 			if(current->state != FULL) {
 				current->state = FULL;
 				current->key = key;
 				current->lock.unlock();
-				status->final_index = index;
-				status->returned = true;
+				if (status) {
+					status->final_index = index;
+					status->returned = true;
+				}
 				return;
 				// Can't guarantee that the element will be there after insert returns...
 			}
@@ -67,9 +69,10 @@ void HashTable::insert(LL key, ThreadLog * status) {
 			current->lock.unlock();
 		}
 	}
-	status->final_index = index;
-	status->returned = false;
-
+	if (status) {
+		status->final_index = index;
+		status->returned = false;
+	}
 }
 
 __device__
@@ -81,7 +84,7 @@ void HashTable::deleteKey(LL key, ThreadLog * status) {
 
 	while (N > 0) {
 		Data *current = table + index;
-		++(status -> iterations[index]);
+		if(status) ++(status -> iterations[index]);
 		if (current->lock.lock(Thread::Delete)) {
 			__threadfence(); // Not sure if it is needed
 			switch(current->state) {
@@ -89,8 +92,10 @@ void HashTable::deleteKey(LL key, ThreadLog * status) {
 					if (current->key == key) {
 						current->state = DELETED;
 						current->lock.unlock();
-						status->final_index = index;
-						status->returned = true;		
+						if (status) {
+							status->final_index = index;
+							status->returned = true;
+						}
 						return;
 					}
 					index = (index + h2) % size; N--;
@@ -100,8 +105,10 @@ void HashTable::deleteKey(LL key, ThreadLog * status) {
 					break;
 				case EMPTY:
 					current->lock.unlock();
-					status->final_index = index;
-					status->returned = false;
+					if (status) {
+						status->final_index = index;
+						status->returned = false;
+					}
 					return;
 				default:
 					printf("Unrecognized thread type\n");
@@ -109,8 +116,10 @@ void HashTable::deleteKey(LL key, ThreadLog * status) {
 			current->lock.unlock();
 		}
 	}
-	status->final_index = index;
-	status->returned = false;
+	if (status) {
+		status->final_index = index;
+		status->returned = false;
+	}
 }
 
 __device__
@@ -123,14 +132,16 @@ void HashTable::findKey(LL key, ThreadLog * status) {
 
 	while (N > 0) {
 		Data *current = table + index;
-		++(status -> iterations[index]);
+		if(status) ++(status -> iterations[index]);
 		if (current->lock.lock(Thread::Find)) {
 			switch(current->state) {
 				case FULL:
 					if (current->key == key) {
 						current->lock.unlock();
-						status->final_index = index;
-						status->returned = true;		
+						if (status) {
+							status->final_index = index;
+							status->returned = true;
+						}
 						return;
 					}
 					// No break; moves to next case
@@ -141,26 +152,34 @@ void HashTable::findKey(LL key, ThreadLog * status) {
 					break;
 				case EMPTY:
 					current->lock.unlock();
-					status->final_index = index;
-					status->returned = false;
+					if (status) {
+						status->final_index = index;
+						status->returned = false;
+					}
 					return;
 			}
 		}
 	}
-	status->final_index = index;
-	status->returned = false;
+	if (status) {
+		status->final_index = index;
+		status->returned = false;
+	}
 }
 
 void HashTable::performInstructs(HashTable *table, Instruction *ins, int numIns, ThreadLog * status) {
 	int threads_per_block = 32;
 	int blocks = (numIns + threads_per_block - 1) / threads_per_block;
-	ThreadLog * d_status;
-	gpuErrchk( cudaMalloc(&d_status, numIns*sizeof(ThreadLog)) );
-	gpuErrchk( cudaMemcpy(d_status, status, numIns*sizeof(ThreadLog), cudaMemcpyDefault) );
+	ThreadLog * d_status = nullptr;
+	if (status) {
+		gpuErrchk( cudaMalloc(&d_status, numIns*sizeof(ThreadLog)) );
+		gpuErrchk( cudaMemcpy(d_status, status, numIns*sizeof(ThreadLog), cudaMemcpyDefault) );
+	}
 	cu::performInstructs<<<blocks, threads_per_block>>>(table, ins, numIns, d_status);
-	gpuErrchk( cudaMemcpy(status, d_status, numIns*sizeof(ThreadLog), cudaMemcpyDefault) );
-	gpuErrchk( cudaFree(d_status) );
-	for (int i = 0; i < numIns; ++i) { (status + i)->fillhostarray(); }
+	if (status) {
+		gpuErrchk( cudaMemcpy(status, d_status, numIns*sizeof(ThreadLog), cudaMemcpyDefault) );
+		gpuErrchk( cudaFree(d_status) );
+		for (int i = 0; i < numIns; ++i) { (status + i)->fillhostarray(); }
+	}
 }
 
 __global__
@@ -173,13 +192,13 @@ void cu::performInstructs(
 			id += blockDim.x * gridDim.x) {
 				switch(instructions[id].type) {
 					case Instruction::Insert:
-						table -> insert(instructions[id].key, status + id);
+						table -> insert(instructions[id].key, status ? status + id : nullptr);
 						break;
 					case Instruction::Delete:
-						table -> deleteKey(instructions[id].key, status + id);
+						table -> deleteKey(instructions[id].key, status ? status + id : nullptr);
 						break;
 					case Instruction::Find:
-						table -> findKey(instructions[id].key, status + id);
+						table -> findKey(instructions[id].key, status ? status + id : nullptr);
 						break;
 				}
 			}

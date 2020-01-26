@@ -1,6 +1,6 @@
 import random
 
-num_instructs = 20000
+num_instructs = 80000
 instructs = ["INSERT", "DELETE", "FIND"]
 minInt = 0
 maxInt = 2 ** 20
