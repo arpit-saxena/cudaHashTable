@@ -57,7 +57,6 @@ void HashTable::insert(LL key, HTResult * status) {
 			N--;
 			current->lock.unlock();
 		}
-	return ;
 	}
 	status->final_index = index;
 	status->returned = false;
