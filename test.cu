@@ -10,7 +10,8 @@
 #include <chrono>
 #include <ctime>
 
-bool logging = false;
+const int hashTable_size = 20;
+const bool logging = false;
 
 /* _global__
 void testKernel(Lock* locks, int num_locks) {
@@ -90,7 +91,7 @@ vector<vector<Instruction>> getInstructions(std::string name) {
 }
 
 int main(int argc, char **argv) {
-    HashTable h_table(100000);
+    HashTable h_table(hashTable_size);
     HashTable *table;
     gpuErrchk( cudaMalloc(&table, sizeof(HashTable)) );
     gpuErrchk( cudaMemcpy(table, &h_table, sizeof(HashTable), cudaMemcpyHostToDevice) );
