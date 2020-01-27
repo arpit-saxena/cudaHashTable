@@ -140,8 +140,10 @@ int main(int argc, char **argv) {
         gpuErrchk( cudaDeviceSynchronize() );
         free(ins);
         cudaFree(d_ins);
-        for(int i = 0; i < numIns; ++i) {
-            (statuses + i)->~ThreadLog();
+        if (statuses) {
+            for (int i = 0; i < numIns; ++i) {
+                (statuses + i)->~ThreadLog();
+            }
         }
     }
 
