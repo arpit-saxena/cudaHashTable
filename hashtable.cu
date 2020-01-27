@@ -50,24 +50,32 @@ void HashTable::insert(ULL key, ThreadLog * status) {
 	while(N > 0){
 		auto current = (table+index);
 		if (status) ++(status -> iterations[index]);
-		if( current->lock.lock(Thread::Insert) ) {
-			__threadfence(); // Not sure if it is needed
-			if(current->state != FULL) {
-				current->state = FULL;
-				current->key = key;
-				current->lock.unlock();
-				if (status) {
-					status->final_index = index;
-					status->returned = true;
-				}
-				return;
-				// Can't guarantee that the element will be there after insert returns...
-			}
-
-			index = (index + h2) % size;
-			N--;
-			current->lock.unlock();
+		Thread oldThread = current->lock.lock(Thread::Insert);
+		switch(oldThread) {
+			case Thread::Null:
+				break;
+			default:
+				index = (index + h2) % size;
+				N--;
+				continue;
 		}
+		
+		__threadfence(); // Not sure if it is needed
+		if(current->state != FULL) {
+			current->state = FULL;
+			current->key = key;
+			current->lock.unlock();
+			if (status) {
+				status->final_index = index;
+				status->returned = true;
+			}
+			return;
+			// Can't guarantee that the element will be there after insert returns...
+		}
+
+		index = (index + h2) % size;
+		N--;
+		current->lock.unlock();
 	}
 	if (status) {
 		status->final_index = index;
@@ -85,36 +93,47 @@ void HashTable::deleteKey(ULL key, ThreadLog * status) {
 	while (N > 0) {
 		Data *current = table + index;
 		if(status) ++(status -> iterations[index]);
-		if (current->lock.lock(Thread::Delete)) {
-			__threadfence(); // Not sure if it is needed
-			switch(current->state) {
-				case FULL:
-					if (current->key == key) {
-						current->state = DELETED;
-						current->lock.unlock();
-						if (status) {
-							status->final_index = index;
-							status->returned = true;
-						}
-						return;
-					}
-					index = (index + h2) % size; N--;
-					break;
-				case DELETED:
-					index = (index + h2) % size; N--;
-					break;
-				case EMPTY:
+
+		Thread oldThread = current->lock.lock(Thread::Delete);
+		switch(oldThread) {
+			case Thread::Null:
+				break;
+			case Thread::Insert:
+				index = (index + h2) % size;
+				N--;
+			case Thread::Delete:
+			case Thread:Find:
+				continue;
+		}
+
+		__threadfence(); // Not sure if it is needed
+		switch(current->state) {
+			case FULL:
+				if (current->key == key) {
+					current->state = DELETED;
 					current->lock.unlock();
 					if (status) {
 						status->final_index = index;
-						status->returned = false;
+						status->returned = true;
 					}
 					return;
-				default:
-					printf("Unrecognized thread type\n");
-			}
-			current->lock.unlock();
+				}
+				index = (index + h2) % size; N--;
+				break;
+			case DELETED:
+				index = (index + h2) % size; N--;
+				break;
+			case EMPTY:
+				current->lock.unlock();
+				if (status) {
+					status->final_index = index;
+					status->returned = false;
+				}
+				return;
+			default:
+				printf("Unrecognized thread type\n");
 		}
+		current->lock.unlock();
 	}
 	if (status) {
 		status->final_index = index;
@@ -133,6 +152,19 @@ void HashTable::findKey(ULL key, ThreadLog * status) {
 	while (N > 0) {
 		Data *current = table + index;
 		if(status) ++(status -> iterations[index]);
+
+		Thread oldThread = current->lock.lock(Thread::Find);
+		switch(oldThread) {
+			case Thread::Null:
+			case Thread::Find:
+				break;
+			case Thread::Insert:
+				index = (index + h2) % size;
+				N--;
+			case Thread::Delete:
+				continue;
+		}
+
 		if (current->lock.lock(Thread::Find)) {
 			switch(current->state) {
 				case FULL:

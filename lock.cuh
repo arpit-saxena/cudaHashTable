@@ -18,7 +18,7 @@ class Lock {
         __device__
         void init();
 
-        // Returns type of thread which held the lock other than this thread
+        // Returns type of thread which held the lock before this thread
         __device__
         Thread lock(Thread type);
 
