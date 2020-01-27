@@ -123,7 +123,7 @@ int main(int argc, char **argv) {
         gpuErrchk( cudaEventCreate(&stop) );
 
         gpuErrchk( cudaEventRecord(start, NULL) );
-        HashTable::performInstructs(table, d_ins, numIns, nullptr);
+        HashTable::performInstructs(table, d_ins, numIns, statuses);
         gpuErrchk( cudaEventRecord(stop, NULL) );
 
         gpuErrchk( cudaEventSynchronize(stop) );

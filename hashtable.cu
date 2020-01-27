@@ -50,6 +50,11 @@ void HashTable::insert(ULL key, ThreadLog * status) {
 	while(N > 0){
 		auto current = (table+index);
 		if (status) ++(status -> iterations[index]);
+		if(current->state == FULL) {
+			index = (index + h2) % size;
+			N--;
+			continue;
+		}
 		Thread oldThread = current->lock.lock(Thread::Insert);
 		switch(oldThread) {
 			case Thread::Null:
@@ -64,7 +69,7 @@ void HashTable::insert(ULL key, ThreadLog * status) {
 		if(current->state != FULL) {
 			current->state = FULL;
 			current->key = key;
-			current->lock.unlock();
+			current->lock.unlock(Thread::Insert);
 			if (status) {
 				status->final_index = index;
 				status->returned = true;
@@ -75,7 +80,7 @@ void HashTable::insert(ULL key, ThreadLog * status) {
 
 		index = (index + h2) % size;
 		N--;
-		current->lock.unlock();
+		current->lock.unlock(Thread::Insert);
 	}
 	if (status) {
 		status->final_index = index;
@@ -93,7 +98,11 @@ void HashTable::deleteKey(ULL key, ThreadLog * status) {
 	while (N > 0) {
 		Data *current = table + index;
 		if(status) ++(status -> iterations[index]);
-
+		if(current->state != FULL) {
+			index = (index + h2) % size;
+			N--;
+			continue;
+		}
 		Thread oldThread = current->lock.lock(Thread::Delete);
 		switch(oldThread) {
 			case Thread::Null:
@@ -102,7 +111,7 @@ void HashTable::deleteKey(ULL key, ThreadLog * status) {
 				index = (index + h2) % size;
 				N--;
 			case Thread::Delete:
-			case Thread:Find:
+			case Thread::Find:
 				continue;
 		}
 
@@ -111,7 +120,7 @@ void HashTable::deleteKey(ULL key, ThreadLog * status) {
 			case FULL:
 				if (current->key == key) {
 					current->state = DELETED;
-					current->lock.unlock();
+					current->lock.unlock(Thread::Delete);
 					if (status) {
 						status->final_index = index;
 						status->returned = true;
@@ -124,7 +133,7 @@ void HashTable::deleteKey(ULL key, ThreadLog * status) {
 				index = (index + h2) % size; N--;
 				break;
 			case EMPTY:
-				current->lock.unlock();
+				current->lock.unlock(Thread::Delete);
 				if (status) {
 					status->final_index = index;
 					status->returned = false;
@@ -133,7 +142,7 @@ void HashTable::deleteKey(ULL key, ThreadLog * status) {
 			default:
 				printf("Unrecognized thread type\n");
 		}
-		current->lock.unlock();
+		current->lock.unlock(Thread::Delete);
 	}
 	if (status) {
 		status->final_index = index;
@@ -152,7 +161,12 @@ void HashTable::findKey(ULL key, ThreadLog * status) {
 	while (N > 0) {
 		Data *current = table + index;
 		if(status) ++(status -> iterations[index]);
-
+		if( (auto currst = current->state) != FULL ) {
+			if(currst == EMPTY)	break;
+			index = (index + h2) % size;
+			N--;
+			continue;
+		}
 		Thread oldThread = current->lock.lock(Thread::Find);
 		switch(oldThread) {
 			case Thread::Null:
@@ -165,31 +179,29 @@ void HashTable::findKey(ULL key, ThreadLog * status) {
 				continue;
 		}
 
-		if (current->lock.lock(Thread::Find)) {
-			switch(current->state) {
-				case FULL:
-					if (current->key == key) {
-						current->lock.unlock();
-						if (status) {
-							status->final_index = index;
-							status->returned = true;
-						}
-						return;
-					}
-					// No break; moves to next case
-				case DELETED:
-					current->lock.unlock();
-					index = (index + h2) % size;
-					N--;
-					break;
-				case EMPTY:
-					current->lock.unlock();
+		switch(current->state) {
+			case FULL:
+				if (current->key == key) {
+					current->lock.unlock(Thread::Find);
 					if (status) {
 						status->final_index = index;
-						status->returned = false;
+						status->returned = true;
 					}
 					return;
-			}
+				}
+				// No break; moves to next case
+			case DELETED:
+				current->lock.unlock(Thread::Find);
+				index = (index + h2) % size;
+				N--;
+				break;
+			case EMPTY:
+				current->lock.unlock(Thread::Find);
+				if (status) {
+					status->final_index = index;
+					status->returned = false;
+				}
+				return;
 		}
 	}
 	if (status) {
@@ -222,15 +234,16 @@ void cu::performInstructs(
 	ThreadLog * status) {
 		for(int id = blockIdx.x * blockDim.x + threadIdx.x; id < numInstructions;
 			id += blockDim.x * gridDim.x) {
+				auto curr_status = status ? status + id : nullptr;
 				switch(instructions[id].type) {
 					case Instruction::Insert:
-						table -> insert(instructions[id].key, status ? status + id : nullptr);
+						table -> insert(instructions[id].key, curr_status);
 						break;
 					case Instruction::Delete:
-						table -> deleteKey(instructions[id].key, status ? status + id : nullptr);
+						table -> deleteKey(instructions[id].key, curr_status);
 						break;
 					case Instruction::Find:
-						table -> findKey(instructions[id].key, status ? status + id : nullptr);
+						table -> findKey(instructions[id].key, curr_status);
 						break;
 				}
 			}
