@@ -81,7 +81,7 @@ vector<vector<Instruction>> getInstructions(std::string name) {
                 printf("Undefined instruction %s\n", type.c_str());
             }
 
-            LL key; fin >> key;
+            ULL key; fin >> key;
             ins.key = key;
             instructions[blockNum].push_back(ins);
         }

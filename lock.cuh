@@ -1,29 +1,32 @@
 #ifndef LOCK_H
 #define LOCK_H
 
+typedef unsigned long long int ULL;
+
 enum class Thread {
-    Insert,
-    Delete,
-    Find
+    Insert = 1,
+    Delete = 2,
+    Find = 0,
+    Null = -1
 };
 
 class Lock {
-    volatile int state;
+    volatile ULL state;
 
     public:
         // Initialises the lock
         __device__
         void init();
 
-        // Returns true if it was able to lock, false otherwise
+        // Returns type of thread which held the lock other than this thread
         __device__
-        bool lock(Thread type);
+        Thread lock(Thread type);
 
         // Returns true if it was able to unlock, false if some error occurred in
         // unlocking (perhaps another thread was holding the lock). If it returns
         // false, the state of the lock is left unchanged
         __device__
-        bool unlock();
+        void unlock(Thread type);
 
         // Returns true if the lock is available to acquire
         // Does not try to acquire the lock

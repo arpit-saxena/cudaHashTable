@@ -17,7 +17,7 @@ void init_table::init_empty_table(Data * table, int size) {
 }
 
 __device__
-int HashFunction::h2(LL x, int size) {
+int HashFunction::h2(ULL x, int size) {
 	x = ((x >> 16) ^ x) * 0x45d9f3b;
     x = ((x >> 16) ^ x) * 0x45d9f3b;
     x = (x >> 16) ^ x;
@@ -25,7 +25,7 @@ int HashFunction::h2(LL x, int size) {
 }
 
 __device__
-int HashFunction::h1(LL a, int size) {
+int HashFunction::h1(ULL a, int size) {
 	a = (a+0x7ed55d16) + (a<<12);
     a = (a^0xc761c23c) ^ (a>>19);
     a = (a+0x165667b1) + (a<<5);
@@ -44,7 +44,7 @@ HashTable::HashTable(int size) {
 }
 
 __device__
-void HashTable::insert(LL key, ThreadLog * status) {
+void HashTable::insert(ULL key, ThreadLog * status) {
 	int N = this->size, h1 = HashFunction::h1(key, size), h2 = HashFunction::h2(key, size);
 	int index = h1;
 	while(N > 0){
@@ -76,7 +76,7 @@ void HashTable::insert(LL key, ThreadLog * status) {
 }
 
 __device__
-void HashTable::deleteKey(LL key, ThreadLog * status) {
+void HashTable::deleteKey(ULL key, ThreadLog * status) {
 	int N = this->size;
 	int h1 = HashFunction::h1(key, size);
 	int h2 = HashFunction::h2(key, size);
@@ -123,7 +123,7 @@ void HashTable::deleteKey(LL key, ThreadLog * status) {
 }
 
 __device__
-void HashTable::findKey(LL key, ThreadLog * status) {
+void HashTable::findKey(ULL key, ThreadLog * status) {
 	int N = this->size;
 	int h1 = HashFunction::h1(key, size);
 	int h2 = HashFunction::h2(key, size);

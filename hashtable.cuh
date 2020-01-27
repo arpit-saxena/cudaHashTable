@@ -4,13 +4,11 @@
 #include "lock.cuh"
 #include <iostream>
 
-typedef unsigned long long int LL;
-
 enum State {EMPTY, DELETED, FULL};
 
 struct Data {
 	volatile State state;
-	volatile LL key;
+	volatile ULL key;
 	Lock lock;
 };
 
@@ -22,7 +20,7 @@ struct Instruction {
 	};
 	
 	Type type;
-	LL key;
+	ULL key;
 };
 
 class ThreadLog {
@@ -49,9 +47,9 @@ class HashTable {
 		HashTable(int size);
 		~HashTable();
 
-		__device__ void insert(LL key, ThreadLog *);
-		__device__ void deleteKey(LL key, ThreadLog *);
-		__device__ void findKey(LL key, ThreadLog *);
+		__device__ void insert(ULL key, ThreadLog *);
+		__device__ void deleteKey(ULL key, ThreadLog *);
+		__device__ void findKey(ULL key, ThreadLog *);
 		static void performInstructs(HashTable *table, Instruction *instructions,
 			int numInstruction, ThreadLog *);
 			static void print(HashTable *table, ThreadLog *, int, std::ostream &);
@@ -75,10 +73,10 @@ namespace cu {
 // Temporary hash functions
 namespace HashFunction {
 	__device__
-	int h1(LL key, int size);
+	int h1(ULL key, int size);
 
 	__device__
-	int h2(LL key, int size);
+	int h2(ULL key, int size);
 }
 
 #endif /* HASHTABLE_H */
