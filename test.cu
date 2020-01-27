@@ -12,7 +12,7 @@
 
 bool logging = false;
 
-__global__
+/* _global__
 void testKernel(Lock* locks, int num_locks) {
     int id = blockIdx.x * blockDim.x + threadIdx.x;
     Lock *lock = locks + id % num_locks;
@@ -58,7 +58,7 @@ void checkLocks() {
     gpuErrchk( cudaDeviceSynchronize() );
 
     gpuErrchk( cudaFree(locks) );
-}
+} */
 
 using std::vector;
 
