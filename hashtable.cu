@@ -98,7 +98,9 @@ void HashTable::deleteKey(ULL key, ThreadLog * status) {
 	while (N > 0) {
 		Data *current = table + index;
 		if(status) ++(status -> iterations[index]);
-		if(current->state != FULL) {
+		ULL currst = current->state;
+		if( currst != FULL ) {
+			if(currst == EMPTY)	break;
 			index = (index + h2) % size;
 			N--;
 			continue;
