@@ -10,7 +10,7 @@
 #include <chrono>
 #include <ctime>
 
-const int hashTable_size = 20;
+const int hashTable_size = 300000;
 const bool logging = false;
 
 /* _global__
