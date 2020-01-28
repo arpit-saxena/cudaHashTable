@@ -7,11 +7,11 @@ enum class Thread {
     Insert = 1,
     Delete = 2,
     Find = 0,
-    Null = -1
+    Null = 3
 };
 
 class Lock {
-    volatile ULL state;
+    volatile int state;
 
     public:
         // Initialises the lock

@@ -173,11 +173,11 @@ void HashTable::findKey(ULL key, ThreadLog * status) {
 		Thread oldThread = current->lock.lock(Thread::Find);
 		switch(oldThread) {
 			case Thread::Null:
-			case Thread::Find:
 				break;
 			case Thread::Insert:
 				index = (index + h2) % size;
 				N--;
+			case Thread::Find:
 			case Thread::Delete:
 				continue;
 		}

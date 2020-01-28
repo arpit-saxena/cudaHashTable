@@ -11,7 +11,7 @@
 #include <ctime>
 
 const int hashTable_size = 300000;
-const bool logging = false;
+const bool logging = true;
 
 /* _global__
 void testKernel(Lock* locks, int num_locks) {
